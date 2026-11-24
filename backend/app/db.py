@@ -93,6 +93,8 @@ class Article(Base):
     issue: Mapped[str] = mapped_column(Text)
     steps: Mapped[str] = mapped_column(Text)
     resolution: Mapped[str] = mapped_column(Text)
+    approved: Mapped[bool] = mapped_column(default=False)
+    verification: Mapped[str] = mapped_column(Text, default="")
     updated_at: Mapped[datetime] = mapped_column(default=now, onupdate=now)
 
 
@@ -116,3 +118,10 @@ class Audit(Base):
 def session():
     with Session() as db:
         yield db
+
+
+class DemoRoster(Base):
+    __tablename__ = "demo_rosters"
+    ticket_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    booking_cutoff: Mapped[str | None] = mapped_column(String(8))
+    roster_cutoff: Mapped[str] = mapped_column(String(8))

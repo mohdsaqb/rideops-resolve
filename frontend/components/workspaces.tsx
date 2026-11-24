@@ -6,7 +6,15 @@ import type { Article, Workspace } from "@/lib/types";
 
 import { Button, Title, Empty, Feedback, SearchBox, Select, Modal } from "./common";
 
-export function Knowledge({ meta, toast }: { meta: Workspace; toast: (message: string) => void }) {
+export function Knowledge({
+  meta,
+  toast,
+  selected,
+}: {
+  selected?: string;
+  meta: Workspace;
+  toast: (message: string) => void;
+}) {
   const [q, search] = useState(""),
     [category, setCat] = useState(""),
     [mode, setMode] = useState(""),
@@ -20,6 +28,8 @@ export function Knowledge({ meta, toast }: { meta: Workspace; toast: (message: s
     steps: "",
     resolution: "",
     updated_at: "",
+    approved: false,
+    verification: "",
   };
   const [draft, edit] = useState<Article>(blank);
   const { data, error, reload } = useData<Article[]>("knowledge?" + query({ q, category }));
@@ -34,14 +44,20 @@ export function Knowledge({ meta, toast }: { meta: Workspace; toast: (message: s
     try {
       if (mode === "Delete article") await api("knowledge/" + draft.id, "DELETE");
       else {
-        const { title, issue, steps, resolution, category } = draft;
-        await api("knowledge" + (draft.id ? "/" + draft.id : ""), draft.id ? "PUT" : "POST", {
-          title,
-          issue,
-          steps,
-          resolution,
-          category,
-        });
+        const { title, issue, steps, resolution, category, approved, verification } = draft;
+        await api(
+          "knowledge" + (mode === "Edit article" ? "/" + draft.id : ""),
+          mode === "Edit article" ? "PUT" : "POST",
+          {
+            title,
+            approved,
+            verification,
+            issue,
+            steps,
+            resolution,
+            category,
+          },
+        );
       }
       setMode("");
       reload();
@@ -55,7 +71,7 @@ export function Knowledge({ meta, toast }: { meta: Workspace; toast: (message: s
   return (
     <>
       <Title
-        title="Knowledge base"
+        title="Knowledge Bank"
         sub="Capture known issues, troubleshooting steps, and approved resolutions."
       >
         <Button variant="default" onClick={() => open("Create article", blank)}>
@@ -78,10 +94,11 @@ export function Knowledge({ meta, toast }: { meta: Workspace; toast: (message: s
           <Feedback error={error} reload={reload} />
         ) : data.length ? (
           data.map((a) => (
-            <details className="article" key={a.id}>
+            <details className="article" key={a.id} open={selected === String(a.id) || undefined}>
               <summary>
                 <BookOpen size={17} />
-                {a.title}
+                {a.title} ·{" "}
+                {a.id === -1 ? "Approved for demo only" : a.approved ? "Approved" : "Draft"}
                 <span className="badge grey">{categoryName(a.category)}</span>
               </summary>
               <small>Updated {date(a.updated_at, true)}</small>
@@ -89,18 +106,25 @@ export function Knowledge({ meta, toast }: { meta: Workspace; toast: (message: s
               <p>{a.issue}</p>
               <h3>Troubleshooting steps</h3>
               <p>{a.steps}</p>
-              <h3>Approved resolution</h3>
+              <h3>Resolution steps</h3>
               <p>{a.resolution || "None recorded"}</p>
-              <div className="actions">
-                <Button onClick={() => open("Edit article", a)}>
-                  <Pencil size={15} />
-                  Edit
-                </Button>
-                <Button onClick={() => open("Delete article", a)}>
-                  <Trash2 size={15} />
-                  Delete
-                </Button>
-              </div>
+              <h3>How to verify</h3>
+              <p>{a.verification || "Verification pending"}</p>
+              {a.id === -1 && (
+                <p>Verified script · Refresh demo cutoff v1. Available on matching demo tickets.</p>
+              )}
+              {a.id !== -1 && (
+                <div className="actions">
+                  <Button onClick={() => open("Edit article", a)}>
+                    <Pencil size={15} />
+                    Edit
+                  </Button>
+                  <Button onClick={() => open("Delete article", a)}>
+                    <Trash2 size={15} />
+                    Delete
+                  </Button>
+                </div>
+              )}
             </details>
           ))
         ) : (
@@ -145,17 +169,29 @@ export function Knowledge({ meta, toast }: { meta: Workspace; toast: (message: s
                   value={draft.category}
                   onChange={(category) => edit({ ...draft, category })}
                 />
-                {(["issue", "steps", "resolution"] as const).map((k, i) => (
+                {(["issue", "steps", "resolution", "verification"] as const).map((k, i) => (
                   <label className="field" key={k}>
-                    {["Known issue", "Troubleshooting steps", "Approved resolution (optional)"][i]}
+                    {
+                      ["Known issue", "Troubleshooting steps", "Resolution steps", "How to verify"][
+                        i
+                      ]
+                    }
                     <textarea
-                      required={k !== "resolution"}
+                      required={k === "issue" || k === "steps" || draft.approved}
                       maxLength={8000}
                       value={draft[k]}
                       onChange={(e) => edit({ ...draft, [k]: e.target.value })}
                     />
                   </label>
                 ))}
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={draft.approved}
+                    onChange={(e) => edit({ ...draft, approved: e.target.checked })}
+                  />{" "}
+                  I reviewed and approve this guide
+                </label>
               </>
             )}
             {err && <p className="error">{err}</p>}

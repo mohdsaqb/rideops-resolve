@@ -257,7 +257,13 @@ export function Badge({ value }: { value: string }) {
                 : "blue")
       }
     >
-      {value.replace("Open - with ", "With ")}
+      {value === "Open - with L1"
+        ? "Open · L1"
+        : value === "Open - with Engineering"
+          ? "Escalated"
+          : value === "Closed"
+            ? "Resolved"
+            : value}
     </span>
   );
 }

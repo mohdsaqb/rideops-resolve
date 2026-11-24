@@ -4,7 +4,8 @@ from datetime import date
 from fastapi import HTTPException
 from sqlalchemy import select
 
-from .db import Article, Audit, Event, State, Ticket
+from .retrieval import ranked_articles
+from .db import Audit, Event, State, Ticket
 
 
 def current(ticket, state, baseline=False):
@@ -97,11 +98,4 @@ def retrieve(db, ticket):
         and r["created_at"] <= ticket["created_at"]
     ]
     history.sort(key=lambda pair: (pair[0], pair[1]["created_at"]), reverse=True)
-    articles = [
-        (rank(a.title + " " + a.issue, a.category), a)
-        for a in db.scalars(select(Article))
-    ]
-    articles.sort(key=lambda pair: pair[0], reverse=True)
-    return [r for score, r in history[:5] if score > 0], [
-        a for score, a in articles[:4] if score > 0
-    ]
+    return [r for score, r in history[:5] if score > 0.25], ranked_articles(db, ticket)

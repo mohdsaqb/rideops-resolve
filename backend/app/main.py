@@ -9,11 +9,12 @@ from typing import Literal
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 
-from . import ai, troubleshooting
+from . import ai, troubleshooting, repairs
 from .analytics import overview
 from .db import (
+    DemoRoster,
     Agent,
     Article,
     Audit,
@@ -29,6 +30,7 @@ from .db import (
 from .import_csv import DATA_DIR, read_csv
 from .records import all_rows, current, event, filtered, filters, get_pair, retrieve
 from .schemas import (
+    ScriptApproval,
     CHECKS,
     AnalysisOut,
     ArticleIn,
@@ -94,6 +96,7 @@ def workspace(db=DB):
 @app.get("/api/tickets", response_model=TicketPage)
 def tickets(
     q: str = "",
+    escalation: Literal["", "Yes", "No"] = "",
     sort: Literal["newest", "oldest", "open-first"] = "newest",
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
@@ -114,6 +117,8 @@ def tickets(
         stmt = stmt.where(Ticket.created_at >= datetime.combine(f["start"], time.min))
     if f["end"]:
         stmt = stmt.where(Ticket.created_at <= datetime.combine(f["end"], time.max))
+    if escalation:
+        stmt = stmt.where(Ticket.original["escalated_to_eng"].as_string() == escalation)
     term = q.strip().lower()
     if term:
         stmt = stmt.where(
@@ -197,6 +202,12 @@ def detail(id: str, db=DB):
     review = troubleshooting.readiness(r, results)
     return dict(
         **r,
+        repair=repairs.SCRIPT
+        if repairs.matches(r)
+        and db.get(DemoRoster, id)
+        and state.status == "Open - with L1"
+        and any(a.id == repairs.ARTICLE_ID for a in articles)
+        else None,
         original=ticket.original,
         similar=similar,
         articles=[article_json(a) for a in articles],
@@ -231,6 +242,53 @@ def update_status(db, t, s, new, reason):
         changes["eng_outcome"] = "Returned to L1"
     s.status, s.changes = new, changes
     event(db, t.id, "Status updated", f"{before} → {new}. {reason}".strip())
+
+
+@app.post("/api/tickets/{id}/run-script")
+def run_script(id: str, body: ScriptApproval, db=DB):
+    # SQLite ignores FOR UPDATE. Reserve its write transaction before reading the ticket.
+    if db.get_bind().dialect.name == "sqlite":
+        db.execute(
+            update(State).where(State.ticket_id == id).values(status=State.status)
+        )
+    t, s = get_pair(db, id, True)
+    article = db.get(Article, repairs.ARTICLE_ID)
+    if (
+        s.status != "Open - with L1"
+        or not article
+        or not article.approved
+        or not repairs.matches(t.original)
+        or not db.get(DemoRoster, id)
+    ):
+        raise HTTPException(409, "This repair is unavailable for this ticket.")
+    analysis = latest(db, Recommendation, id)
+    if not analysis or not any(
+        source["id"] == repairs.ARTICLE_ID
+        for source in analysis.result.get("sources", [])
+    ):
+        raise HTTPException(
+            409, "Analyse the ticket and review the suggested procedure first."
+        )
+    success, message = repairs.refresh_cutoff(db, id)
+    event(
+        db,
+        id,
+        "Verified script" if success else "Verification failed",
+        f"{body.script}. {message}",
+    )
+    if success:
+        update_status(db, t, s, "Closed", message)
+    db.commit()
+    return {"verified": success, "message": message, "status": s.status}
+
+
+@app.get("/api/backlog")
+def backlog(db=DB):
+    rows = [r for r in all_rows(db) if r["status"] != "Closed"]
+    today = now().date()
+    for r in rows:
+        r["age_days"] = max(0, (today - date.fromisoformat(r["created_at"][:10])).days)
+    return sorted(rows, key=lambda r: (r["priority"], r["created_at"]))
 
 
 @app.patch("/api/tickets/{id}", response_model=TicketOut)
@@ -341,7 +399,9 @@ def analyse(id: str, db=DB):
     )
     db.add(
         Recommendation(
-            ticket_id=id, source=response.source, result=response.model_dump()
+            ticket_id=id,
+            source=response.source,
+            result=response.model_dump(mode="json"),
         )
     )
     event(db, id, "Analysis prepared", response.source)
@@ -513,6 +573,8 @@ def create(body: ArticleIn, db=DB):
 @app.put("/api/knowledge/{id}", response_model=ArticleOut)
 def edit(id: int, body: ArticleIn, db=DB):
     article = db.get(Article, id, with_for_update=True)
+    if id == repairs.ARTICLE_ID:
+        raise HTTPException(409, "The reviewed demo procedure is read-only.")
     if not article:
         raise HTTPException(404, "Article not found")
     known_category(db, body)
@@ -526,6 +588,8 @@ def edit(id: int, body: ArticleIn, db=DB):
 @app.delete("/api/knowledge/{id}", status_code=204)
 def delete(id: int, db=DB):
     article = db.get(Article, id, with_for_update=True)
+    if id == repairs.ARTICLE_ID:
+        raise HTTPException(409, "The reviewed demo procedure is read-only.")
     if not article:
         raise HTTPException(404, "Article not found")
     db.delete(article)

@@ -226,6 +226,14 @@ def test_search_knowledge_and_validation(client):
         ).json()[0]["id"]
         == item["id"]
     )
+    assert item["id"] not in [a["id"] for a in c.get(path).json()["articles"]]
+    approved = {
+        **fields,
+        "resolution": "Reviewed resolution",
+        "verification": "Read the result back",
+        "approved": True,
+    }
+    assert c.put("/api/knowledge/" + str(item["id"]), json=approved).is_success
     assert c.get(path).json()["articles"][0]["id"] == item["id"]
     assert c.put(
         "/api/knowledge/" + str(item["id"]),
@@ -309,3 +317,48 @@ def test_hosted_postgres_url(monkeypatch, scheme):
     assert url.drivername == "postgresql+psycopg" and url.password == "p@ss"
     assert (url.host, url.port, url.database) == ("db.test", 5544, "tickets")
     assert url.query["sslmode"] == "require"
+
+
+@pytest.mark.parametrize(
+    ("ticket_id", "success"), [("SUP-11422", True), ("SUP-11438", False)]
+)
+def test_demo_script(client, ticket_id, success):
+    c, _ = client
+    path = "/api/tickets/" + ticket_id
+    before = c.get(path).json()
+    script = before["repair"]
+    assert script and c.post(path + "/analyse").json()["sources"][0]["id"] == -1
+    assert c.get("/api/knowledge?q=Refresh").json()[0]["approved"]
+    assert (
+        c.post(
+            path + "/run-script", json={"script": script, "approved": False}
+        ).status_code
+        == 422
+    )
+    assert (
+        c.post(
+            path + "/run-script", json={"script": "unknown", "approved": True}
+        ).status_code
+        == 422
+    )
+    result = c.post(
+        path + "/run-script", json={"script": script, "approved": True}
+    ).json()
+    assert result["verified"] is success
+    after = c.get(path).json()
+    assert after["status"] == ("Closed" if success else "Open - with L1")
+    assert after["original"] == before["original"]
+    assert any(result["message"] in e["text"] for e in after["timeline"])
+    if success:
+        assert (
+            c.post(
+                path + "/run-script", json={"script": script, "approved": True}
+            ).status_code
+            == 409
+        )
+    assert c.get("/api/tickets?q=" + ticket_id + "&escalation=Yes").json()[
+        "total"
+    ] == int(before["escalated_to_eng"] == "Yes")
+    assert (
+        ticket_id in {r["ticket_id"] for r in c.get("/api/backlog").json()}
+    ) != success

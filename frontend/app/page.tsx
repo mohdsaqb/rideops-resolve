@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BookOpen, ChartColumn, Inbox, Route, Menu, PanelLeftClose } from "lucide-react";
+import { BookOpen, ChartColumn, Wrench, Inbox, Route, Menu, PanelLeftClose } from "lucide-react";
 import { TicketQueue } from "@/components/TicketQueue";
 import { TicketDetail } from "@/components/Ticket";
 import { Reports } from "@/components/Reports";
@@ -11,9 +11,10 @@ import { useData } from "@/lib/api";
 import type { Workspace } from "@/lib/types";
 
 const navigation = [
-  { id: "tickets", label: "Ticket queue", icon: Inbox },
-  { id: "knowledge", label: "Knowledge base", icon: BookOpen },
-  { id: "reports", label: "Operations dashboard", icon: ChartColumn },
+  { id: "reports", label: "Dashboard", icon: ChartColumn },
+  { id: "tickets", label: "Tickets", icon: Inbox },
+  { id: "resolve", label: "Resolve Ticket", icon: Wrench },
+  { id: "knowledge", label: "Knowledge Bank", icon: BookOpen },
 ];
 const oldPages: Record<string, string> = {
   escalations: "tickets",
@@ -24,14 +25,14 @@ const oldPages: Record<string, string> = {
 };
 
 export default function Page() {
-  const [path, setPath] = useState("tickets");
+  const [path, setPath] = useState("reports");
   const [menuOpen, setMenuOpen] = useState(false);
   const [message, setMessage] = useState("");
   const workspace = useData<Workspace>("workspace");
   useEffect(() => {
     function followLink() {
       setMenuOpen(false);
-      setPath(location.hash.slice(1) || "tickets");
+      setPath(location.hash.slice(1) || "reports");
       window.scrollTo(0, 0);
     }
     followLink();
@@ -53,11 +54,11 @@ export default function Page() {
       case "ticket":
         return <TicketDetail key={id} id={id} initial={tab} meta={meta} toast={setMessage} />;
       case "knowledge":
-        return <Knowledge meta={meta} toast={setMessage} />;
+        return <Knowledge selected={id} meta={meta} toast={setMessage} />;
       case "reports":
         return <Reports meta={meta} showSettings={route === "settings"} />;
       default:
-        return <TicketQueue meta={meta} />;
+        return <TicketQueue key={screen} resolving={screen === "resolve"} meta={meta} />;
     }
   }
   return (
@@ -81,7 +82,7 @@ export default function Page() {
               key={id}
               href={"#" + id}
               onClick={() => setMenuOpen(false)}
-              aria-current={(screen === "ticket" ? "tickets" : screen) === id ? "page" : undefined}
+              aria-current={(screen === "ticket" ? "resolve" : screen) === id ? "page" : undefined}
             >
               <Icon size={16} />
               {label}

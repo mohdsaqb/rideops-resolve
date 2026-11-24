@@ -54,6 +54,22 @@ class ArticleIn(Config):
     steps: Text
     resolution: OptionalText = ""
 
+    approved: bool = False
+    verification: OptionalText = ""
+
+    @model_validator(mode="after")
+    def verify_approval(self):
+        if self.approved and not (self.verification and self.resolution):
+            raise ValueError(
+                "Add resolution and verification steps before approving the guide"
+            )
+        return self
+
+
+class ScriptApproval(Config):
+    script: Literal["refresh-demo-cutoff-v1"]
+    approved: Literal[True]
+
 
 class ArticleOut(ArticleIn):
     model_config = ConfigDict(from_attributes=True)
@@ -140,6 +156,7 @@ class AnalysisOut(Config):
     source: Literal["Groq", "Predefined rules"]
     result: Analysis
     detail: str
+    sources: list[ArticleOut] = Field(default_factory=list)
 
 
 class TicketOut(BaseModel):

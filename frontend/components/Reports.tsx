@@ -1,6 +1,15 @@
 "use client";
+import { Backlog } from "./Backlog";
 import { useState } from "react";
-import { AreaChart, Area, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  AreaChart,
+  Area,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { date, num, query, categoryName, useData } from "@/lib/api";
 import type { Entry, Filters, Overview, Workspace } from "@/lib/types";
 import { Button, Feedback, FilterBar, Title, Empty } from "./common";
@@ -13,10 +22,15 @@ function Trend({ data }: { data: Overview }) {
         <div>
           <h2>Ticket volume</h2>
           <p>
-            Grouped by creation date. Escalated counts include tickets that later went to engineering.
+            Grouped by creation date. Escalated counts include tickets that later went to
+            engineering.
           </p>
         </div>
-        <select aria-label="Trend interval" value={period} onChange={(e) => setPeriod(e.target.value)}>
+        <select
+          aria-label="Trend interval"
+          value={period}
+          onChange={(e) => setPeriod(e.target.value)}
+        >
           <option value="weekly">Weekly</option>
           <option value="monthly">Monthly</option>
         </select>
@@ -34,7 +48,12 @@ function Trend({ data }: { data: Overview }) {
                 margin={{ left: -20, right: 8 }}
               >
                 <CartesianGrid vertical={false} stroke="#e4eae7" />
-                <XAxis dataKey="date" tickFormatter={(d) => date(d)} tickLine={false} fontSize={12} />
+                <XAxis
+                  dataKey="date"
+                  tickFormatter={(d) => date(d)}
+                  tickLine={false}
+                  fontSize={12}
+                />
                 <YAxis allowDecimals={false} tickLine={false} fontSize={12} />
                 <Tooltip labelFormatter={(d) => date(String(d), true)} />
                 <Area
@@ -177,7 +196,11 @@ export function Reports({ meta, showSettings }: { meta: Workspace; showSettings:
           percent(k.returned_rate),
           k.returned + " of " + k.escalated + " escalated tickets",
         ],
-        ["Ticket reopen rate", percent(k.reopen_rate), k.reopened + " of " + num(k.total) + " tickets"],
+        [
+          "Ticket reopen rate",
+          percent(k.reopen_rate),
+          k.reopened + " of " + num(k.total) + " tickets",
+        ],
         [
           "Average CSAT",
           k.csat === null ? "—" : k.csat.toFixed(2) + " / 5",
@@ -188,7 +211,7 @@ export function Reports({ meta, showSettings }: { meta: Workspace; showSettings:
   return (
     <>
       <Title
-        title="Operations dashboard"
+        title="Dashboard"
         sub="Historical support performance at the CSV data pull. Local ticket edits are tracked in the queue."
       >
         <FilterBar meta={meta} filters={filters} set={setFilters} />
@@ -211,6 +234,7 @@ export function Reports({ meta, showSettings }: { meta: Workspace; showSettings:
               </section>
             ))}
           </div>
+          <Backlog />
           <Trend data={data} />
           <section className="card">
             <h2>Operational insights</h2>
@@ -236,7 +260,9 @@ export function Reports({ meta, showSettings }: { meta: Workspace; showSettings:
         </p>
         <p>
           AI service ·{" "}
-          {meta.groq_configured ? "Groq · " + meta.model : "Predefined rules (Groq key not configured)"}
+          {meta.groq_configured
+            ? "Groq · " + meta.model
+            : "Predefined rules (Groq key not configured)"}
         </p>
         <dl>
           {meta.dictionary.map((row) => (

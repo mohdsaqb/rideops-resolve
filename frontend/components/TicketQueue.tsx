@@ -4,7 +4,7 @@ import { useData, query, date, categoryName } from "@/lib/api";
 import type { Workspace, Filters, TicketPage } from "@/lib/types";
 import { Title, FilterBar, SearchBox, Badge, Pages, Feedback, Empty } from "./common";
 
-export function TicketQueue({ meta }: { meta: Workspace }) {
+export function TicketQueue({ meta, resolving }: { meta: Workspace; resolving: boolean }) {
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Filters>({});
   const [sort, setSort] = useState("open-first");
@@ -15,7 +15,7 @@ export function TicketQueue({ meta }: { meta: Workspace }) {
   return (
     <>
       <Title
-        title="Ticket queue"
+        title={resolving ? "Choose a ticket to resolve" : "Tickets"}
         sub="Open a ticket to investigate the issue, record your checks, and decide the next step."
       />
       <section className="card queue">
@@ -58,6 +58,18 @@ export function TicketQueue({ meta }: { meta: Workspace }) {
               <option value="open-first">Open first · oldest first</option>
               <option value="newest">Newest first</option>
               <option value="oldest">Oldest first</option>
+            </select>
+            <select
+              aria-label="Historical escalation"
+              value={filters.escalation || ""}
+              onChange={(e) => {
+                setFilters({ ...filters, escalation: e.target.value });
+                setPage(1);
+              }}
+            >
+              <option value="">All escalations</option>
+              <option value="Yes">Previously escalated</option>
+              <option value="No">Never escalated</option>
             </select>
             <FilterBar
               meta={meta}

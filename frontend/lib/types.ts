@@ -28,6 +28,8 @@ export type Article = {
   issue: string;
   steps: string;
   resolution: string;
+  approved: boolean;
+  verification: string;
   updated_at: string;
 };
 export type Handoff = Record<
@@ -41,6 +43,7 @@ export type Handoff = Record<
   string
 >;
 export type Analysis = {
+  sources?: Article[];
   source: string;
   detail: string;
   result: {
@@ -68,6 +71,7 @@ export type Readiness = {
   summary: string;
 };
 export type Detail = Ticket & {
+  repair: string | null;
   guidance: { checks: string[]; resolve: string; engineering: string };
   readiness: Readiness;
   handoff_evidence?: HandoffEvidence;

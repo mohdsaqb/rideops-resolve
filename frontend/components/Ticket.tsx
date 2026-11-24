@@ -11,7 +11,13 @@ export function TicketDetail({ id, initial, meta, toast }: Props) {
   const detail = useData<Detail>("tickets/" + encodeURIComponent(id));
   if (!detail.data) return <Feedback error={detail.error} reload={detail.reload} />;
   return (
-    <Ticket ticket={detail.data} initial={initial} meta={meta} toast={toast} reload={detail.reload} />
+    <Ticket
+      ticket={detail.data}
+      initial={initial}
+      meta={meta}
+      toast={toast}
+      reload={detail.reload}
+    />
   );
 }
 
@@ -29,7 +35,7 @@ function Related({ ticket, open }: { ticket: Detail; open: boolean }) {
       ))}
       {!ticket.articles.length && (
         <p>
-          No matching articles. <a href="#knowledge">Open knowledge base</a>
+          No matching approved articles. <a href="#knowledge">Open knowledge base</a>
         </p>
       )}
       {ticket.similar.map((t) => (
@@ -121,6 +127,7 @@ function Ticket({
   toast,
   reload,
 }: Omit<Props, "id"> & { ticket: Detail; reload: () => void }) {
+  const [confirmRepair, setConfirmRepair] = useState(false);
   const [operation, setOperation] = useState<Operation | null>(null);
   const [text, setText] = useState("");
   const [agent, setAgent] = useState(t.assigned_agent);
@@ -185,11 +192,17 @@ function Ticket({
         await api(endpoint + "/notes", "POST", { text });
         break;
       case "Resolve ticket":
-        await api(endpoint + "/resolve", "POST", { text, engineering_outcome: outcome || undefined });
+        await api(endpoint + "/resolve", "POST", {
+          text,
+          engineering_outcome: outcome || undefined,
+        });
         break;
       case "Reopen ticket":
       case "Return to L1":
-        await api(endpoint, "PATCH", { status: "Open - with L1", return_outcome: outcome || undefined });
+        await api(endpoint, "PATCH", {
+          status: "Open - with L1",
+          return_outcome: outcome || undefined,
+        });
         break;
     }
     setOperation(null);
@@ -209,7 +222,8 @@ function Ticket({
         </div>
         <h1>{t.description}</h1>
         <p>
-          {t.client_name} · {categoryName(t.category)} · {date(t.created_at, true)} · {t.assigned_agent}
+          {t.client_name} · {categoryName(t.category)} · {date(t.created_at, true)} ·{" "}
+          {t.assigned_agent}
         </p>
       </header>
       <div className="tabs" aria-label="Ticket sections">
@@ -239,7 +253,7 @@ function Ticket({
             <div className="card-heading">
               <div>
                 <h2>L1 investigation</h2>
-                <p>These suggested checks guide your investigation. Record only what you observe.</p>
+                <p>Source · Suggested category checklist. Record only what you observe.</p>
               </div>
               <Button disabled={busy} onClick={() => perform(analyse)}>
                 <Sparkles size={16} />
@@ -253,15 +267,34 @@ function Ticket({
                 </small>
                 <h3>Problem summary</h3>
                 <p>{analysis.result.problem_summary}</p>
+                <h3>Recommended checks and sources</h3>
+                {analysis.sources?.length ? (
+                  analysis.sources.map((a) => (
+                    <article key={a.id}>
+                      <a href={"#knowledge/" + a.id}>{a.title}</a>
+                      {a.id === -1 && <small> · Demo workspace only</small>}
+                      <p>{a.steps}</p>
+                      <p>{a.resolution}</p>
+                      <small>Verify · {a.verification}</small>
+                    </article>
+                  ))
+                ) : (
+                  <p>
+                    No matching approved guide. Use the suggested category checks to collect
+                    evidence.
+                  </p>
+                )}
                 <dl>
                   {Object.entries({
                     "Likely category": analysis.result.category,
                     "Priority assessment":
                       (analysis.result.priority || t.priority) + " · recorded ticket priority",
                     "Confirmed facts": analysis.result.confirmed_facts.join(" · "),
-                    "Possible causes": analysis.result.possible_causes.join(" · ") || "None established",
+                    "Possible causes":
+                      analysis.result.possible_causes.join(" · ") || "None established",
                     "Missing information":
-                      analysis.result.missing_information.join(" · ") || "Review collected evidence",
+                      analysis.result.missing_information.join(" · ") ||
+                      "Review collected evidence",
                   }).map(([label, v]) => (
                     <div key={label}>
                       <dt>{label}</dt>
@@ -274,6 +307,63 @@ function Ticket({
                 </p>
                 {analysis.result.next_step && <p>{analysis.result.next_step}</p>}
               </div>
+            )}
+            {t.repair && analysis?.sources?.some((a) => a.id === -1) && (
+              <section className="card">
+                <h3>Refresh demo roster cutoff</h3>
+                <p>
+                  Copy the confirmed cutoff into this demo roster and read it back. A match closes
+                  this workspace ticket. A failed check leaves it with L1.
+                </p>
+                <Button onClick={() => setConfirmRepair(true)}>Review verified script</Button>
+                {confirmRepair && (
+                  <Modal
+                    title="Run the demo repair?"
+                    close={() => {
+                      if (!busy) setConfirmRepair(false);
+                    }}
+                  >
+                    <p>
+                      Approve Refresh demo cutoff v1 for {t.ticket_id} and close this ticket if
+                      verification passes?
+                    </p>
+                    <div className="actions">
+                      <Button disabled={busy} onClick={() => setConfirmRepair(false)}>
+                        Cancel
+                      </Button>
+                      <Button
+                        disabled={busy}
+                        onClick={() =>
+                          perform(async () => {
+                            await saveResults();
+                            const run = await api<{ message: string }>(
+                              endpoint + "/run-script",
+                              "POST",
+                              { script: t.repair, approved: true },
+                            );
+                            toast(run.message);
+                            setConfirmRepair(false);
+                            reload();
+                          })
+                        }
+                      >
+                        Approve and run
+                      </Button>
+                    </div>
+                  </Modal>
+                )}
+              </section>
+            )}
+            {t.timeline.find((e) =>
+              ["Verification failed", "Verified script"].includes(e.kind),
+            ) && (
+              <p role="status">
+                {
+                  t.timeline.find((e) =>
+                    ["Verification failed", "Verified script"].includes(e.kind),
+                  )?.text
+                }
+              </p>
             )}
             {t.guide.map((step, i) => (
               <label className="field" key={step}>
@@ -379,7 +469,12 @@ function Ticket({
             }}
           >
             {operation === "Assign ticket" ? (
-              <Select label="Assigned agent" options={meta.agents} value={agent} onChange={setAgent} />
+              <Select
+                label="Assigned agent"
+                options={meta.agents}
+                value={agent}
+                onChange={setAgent}
+              />
             ) : operation === "Resolve ticket" || operation === "Add note" ? (
               <label className="field">
                 {operation === "Resolve ticket" ? "Resolution summary" : "Internal note"}
@@ -404,7 +499,12 @@ function Ticket({
                   options={
                     operation === "Return to L1"
                       ? ["Config issue - returned to L1", "Insufficient info - returned to L1"]
-                      : ["Fixed", "Duplicate of known issue", "Not a bug - how-to", "Not reproducible"]
+                      : [
+                          "Fixed",
+                          "Duplicate of known issue",
+                          "Not a bug - how-to",
+                          "Not reproducible",
+                        ]
                   }
                 />
               )}

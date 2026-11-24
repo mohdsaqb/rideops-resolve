@@ -15,6 +15,7 @@ async function verify() {
     const detail = async () => (await page.request.get(origin + "/api/tickets/" + ticketId)).json();
     const ticket = await detail();
     await page.goto(origin);
+    await page.getByRole("link", { name: "Tickets", exact: true }).click();
     await page.getByRole("button", { name: "Roster & booking", exact: true }).click();
     await page.getByPlaceholder("Search by ticket ID or description").fill(ticketId);
     await page.getByRole("link", { name: ticketId, exact: true }).click();
@@ -45,13 +46,29 @@ async function verify() {
     const after = await detail();
     assert.equal(after.status, ticket.status);
     assert.equal(after.eng_ticket_id, ticket.eng_ticket_id);
-    await page.getByRole("link", { name: "Operations dashboard" }).click();
+    await page.getByRole("link", { name: "Dashboard" }).click();
     await page.getByRole("heading", { name: "Returned escalation rate" }).waitFor();
     assert.deepEqual((await report()).kpis, baseline.kpis);
+    for (const [id, success] of [
+      ["SUP-11422", true],
+      ["SUP-11438", false],
+    ]) {
+      await page.goto(origin + "/#ticket/" + id);
+      await page.getByRole("button", { name: "Analyse with AI" }).click();
+      await page.getByRole("link", { name: "Refresh a demo roster cutoff" }).click();
+      await page.getByPlaceholder("Search articles").fill("Refresh");
+      await page.getByText("How to verify", { exact: true }).waitFor();
+      await page.goto(origin + "/#ticket/" + id);
+      await page.getByRole("button", { name: "Review verified script" }).click();
+      await page.getByRole("button", { name: "Approve and run" }).click();
+      await page.getByRole("button", { name: "Approve and run" }).waitFor({ state: "detached" });
+      const saved = await (await page.request.get(origin + "/api/tickets/" + id)).json();
+      assert.equal(saved.status, success ? "Closed" : "Open - with L1");
+    }
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole("button", { name: "Open navigation" }).click();
-    await page.getByRole("link", { name: "Ticket queue", exact: true }).click();
-    await page.getByRole("heading", { name: "Ticket queue" }).waitFor();
+    await page.getByRole("link", { name: "Tickets", exact: true }).click();
+    await page.getByRole("heading", { name: "Tickets" }).waitFor();
     assert.deepEqual(errors, []);
     console.log(
       "Search, analysis, readiness, clipboard, persistence, dashboard and mobile navigation passed.",
