@@ -7,11 +7,21 @@ RideOps helps first-line support agents solve employee transport issues before p
 ## Architecture
 
 ```mermaid
-flowchart LR
-    UI["Agent workspace · React"] --> API["Support API · FastAPI"]
-    API <--> DB["SQLite locally or PostgreSQL"]
-    CSV["1,444 case-study tickets"] -->|Import| DB
-    API -. Optional AI analysis .-> Groq["Groq"]
+flowchart TD
+    UI["Agent’s browser · React workspace"]
+    subgraph service["RideOps web service on Render"]
+        API["FastAPI · serves the workspace and handles ticket requests"]
+        Search["Find similar tickets and approved guides"]
+        Import["Startup CSV importer"]
+    end
+    UI -->|Calls /api| API
+    API -->|Serves pages and returns results| UI
+    CSV["Ticket CSV"] --> Import
+    Import -->|Loads new tickets| DB["PostgreSQL · SQLite for local runs"]
+    API <-->|Reads tickets and saves agent actions| DB
+    API --> Search
+    Search -->|Reads historical tickets and guides| DB
+    API -.->|Optional analysis with retrieved context| Groq["Groq"]
 ```
 
 ## How a ticket gets resolved
