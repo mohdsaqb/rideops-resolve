@@ -1,8 +1,10 @@
 # RideOps Resolve
 
-RideOps helps first-line support agents solve employee transport issues before passing them to engineering. In the case study, engineering returned **173 of 486 escalations** to support. RideOps gives agents approved guides, similar tickets and a way to verify a fix.
+An AI-assisted workspace for first-line support agents investigating employee transport issues, from missing bookings to incorrect cab locations.
 
-[Open the live demo](https://rideops-resolve.onrender.com/)
+**[Open the live demo →](https://rideops-resolve.onrender.com/)**
+
+In the case study, engineering sent **173 of 486 escalated tickets** back to support. RideOps helps agents investigate before escalating. They can compare similar tickets, follow an approved guide, and verify a repair or prepare an engineering handoff with the evidence they collected.
 
 ## Architecture
 
