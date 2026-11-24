@@ -88,7 +88,7 @@ def workspace(db=DB):
         ],
         "dictionary": read_csv(DATA_DIR / "rideops_data_dictionary.csv"),
         "groq_configured": bool(os.getenv("GROQ_API_KEY")),
-        "model": os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+        "model": ai.configured_model(),
         "ticket_count": len(rows),
     }
 

@@ -16,6 +16,10 @@ from .troubleshooting import (
 )
 
 
+def configured_model():
+    return os.getenv("GROQ_MODEL", "").strip() or "openai/gpt-oss-20b"
+
+
 class GroqDraft(Config):
     problem_summary: Text
     customer_response: Text
@@ -124,7 +128,7 @@ def analyse(ticket, results, notes, similar, articles):
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers={"Authorization": f"Bearer {key}"},
                 json={
-                    "model": os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+                    "model": configured_model(),
                     "temperature": 0.15,
                     "response_format": {"type": "json_object"},
                     "messages": [
