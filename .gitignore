@@ -1,0 +1,14 @@
+.env
+.env.local
+node_modules/
+.next/
+__pycache__/
+.venv/
+.pytest_cache/
+*.db
+*.tsbuildinfo
+.DS_Store
+.ruff_cache/
+
+.rideops/
+frontend/out/

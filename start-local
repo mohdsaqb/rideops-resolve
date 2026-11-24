@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+"""Build the interface and open the local SQLite workspace."""
+
+import hashlib
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+
+ROOT = Path(__file__).resolve().parent
+BACKEND = ROOT / "backend"
+WEB = ROOT / "frontend"
+DATA = ROOT / ".rideops"
+VENV = ROOT / ".venv"
+PYTHON = VENV / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+
+
+def run_if_changed(stamp, inputs, output, command, cwd):
+    digest = hashlib.sha256()
+    for path in sorted(inputs):
+        digest.update(str(path.relative_to(ROOT)).encode() + b"\0")
+        digest.update(path.read_bytes())
+    if output.exists() and stamp.exists() and stamp.read_text() == digest.hexdigest():
+        return
+    subprocess.run(command, cwd=cwd, check=True)
+    stamp.write_text(digest.hexdigest())
+
+
+def main():
+    if sys.version_info < (3, 12):
+        sys.exit("Install Python 3.12 or newer and run the launcher again.")
+    npm = shutil.which("npm")
+    if not npm:
+        sys.exit("Install Node.js 22 with npm and run the launcher again.")
+    DATA.mkdir(exist_ok=True)
+    if not PYTHON.exists():
+        subprocess.run([sys.executable, "-m", "venv", VENV], check=True)
+    requirements = BACKEND / "requirements-local.txt"
+    run_if_changed(
+        VENV / ".rideops-requirements",
+        [requirements],
+        PYTHON,
+        [PYTHON, "-m", "pip", "install", "-r", requirements],
+        BACKEND,
+    )
+
+    manifests = [WEB / "package.json", WEB / "package-lock.json"]
+    run_if_changed(
+        DATA / "web-dependencies", manifests, WEB / "node_modules/next/package.json", [npm, "ci"], WEB
+    )
+    sources = [
+        file
+        for folder in ("app", "components", "lib", "public")
+        for file in (WEB / folder).rglob("*")
+        if file.is_file()
+    ]
+    run_if_changed(
+        DATA / "web-build",
+        [*sources, *manifests, *WEB.glob("*.config.*"), WEB / "tsconfig.json"],
+        WEB / "out/index.html",
+        [npm, "run", "build"],
+        WEB,
+    )
+
+    settings = ROOT / ".env"
+    if settings.is_file():
+        for line in settings.read_text(encoding="utf-8").splitlines():
+            key, _, value = line.partition("=")
+            if key.strip() in ("GROQ_API_KEY", "GROQ_MODEL"):
+                os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
+    os.environ["DATABASE_URL"] = "sqlite:///" + (DATA / "rideops.db").as_posix()
+    os.environ["HOST"] = "127.0.0.1"
+    os.chdir(BACKEND)
+    os.execv(PYTHON, [str(PYTHON), "-m", "app"])
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
+    except (OSError, subprocess.CalledProcessError) as exc:
+        sys.exit(f"Could not start RideOps: {exc}")
