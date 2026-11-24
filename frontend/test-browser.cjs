@@ -21,6 +21,14 @@ async function verify() {
     await page.getByRole("link", { name: ticketId, exact: true }).click();
     await page.getByRole("button", { name: "Analyse with AI" }).click();
     await page.getByRole("heading", { name: "Problem summary" }).waitFor();
+    await page.getByText("Saved analysis", { exact: true }).click();
+    const summary = page.getByRole("heading", { name: "Problem summary" });
+    await summary.waitFor({ state: "hidden" });
+    await page.reload();
+    await page.getByText("Saved analysis", { exact: true }).waitFor();
+    assert.equal(await summary.isVisible(), false);
+    await page.getByText("Saved analysis", { exact: true }).click();
+    await summary.waitFor();
     for (const field of await page.getByPlaceholder("Record observed result").all())
       await field.fill("Observation recorded during isolated browser verification.");
     await page.getByRole("button", { name: "Prepare handoff" }).click();

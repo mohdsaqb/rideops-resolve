@@ -134,6 +134,7 @@ function Ticket({
   const [outcome, setOutcome] = useState("");
   const [results, setResults] = useState(t.results);
   const savedResults = useRef(t.results);
+  const [analysisOpen, setAnalysisOpen] = useState(false);
   const [analysis, setAnalysis] = useState(t.analysis);
   const [reply, setReply] = useState(t.analysis?.result.customer_response || "");
   const [busy, setBusy] = useState(false);
@@ -172,6 +173,7 @@ function Ticket({
     await saveResults();
     const next = await api<Analysis>(endpoint + "/analyse", "POST");
     setAnalysis(next);
+    setAnalysisOpen(true);
     setReply(next.result.customer_response);
     toast("Analysis ready");
   }
@@ -261,7 +263,12 @@ function Ticket({
               </Button>
             </div>
             {analysis && (
-              <div className="analysis">
+              <details
+                className="analysis"
+                open={analysisOpen}
+                onToggle={(e) => setAnalysisOpen(e.currentTarget.open)}
+              >
+                <summary>Saved analysis</summary>
                 <small>
                   {analysis.source} · {analysis.detail}
                 </small>
@@ -306,7 +313,7 @@ function Ticket({
                   <strong>Recommended action</strong> · {analysis.result.recommended_action}
                 </p>
                 {analysis.result.next_step && <p>{analysis.result.next_step}</p>}
-              </div>
+              </details>
             )}
             {t.repair && analysis?.sources?.some((a) => a.id === -1) && (
               <section className="card">

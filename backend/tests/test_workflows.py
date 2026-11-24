@@ -275,7 +275,9 @@ def test_groq_failures_and_validation(client, monkeypatch):
         + c.get("/api/tickets?limit=1").json()["items"][0]["ticket_id"]
         + "/analyse"
     )
-    valid = c.post(path).json()["result"]
+    baseline = c.post(path).json()
+    assert not baseline["sources"]
+    valid = {k: baseline["result"][k] for k in ("problem_summary", "customer_response")}
     monkeypatch.setenv("GROQ_API_KEY", "test-only")
     request = httpx.Request("POST", "https://example.invalid")
     calls = []
@@ -299,13 +301,24 @@ def test_groq_failures_and_validation(client, monkeypatch):
         "post",
         lambda *a, **k: httpx.Response(200, json={"choices": []}, request=request),
     )
-    assert c.post(path).json()["source"] == "Predefined rules"
+    assert "unexpected format" in c.post(path).json()["detail"]
 
     def timeout(*args, **kwargs):
         raise httpx.ReadTimeout("timeout")
 
     monkeypatch.setattr(ai.httpx, "post", timeout)
-    assert c.post(path).json()["source"] == "Predefined rules"
+    assert "timed out" in c.post(path).json()["detail"]
+    for status, message in [
+        (401, "API key"),
+        (403, "denied access"),
+        (429, "usage limit"),
+        (503, "service error"),
+    ]:
+        response = httpx.Response(
+            status, headers={"Retry-After": "10"}, request=request
+        )
+        monkeypatch.setattr(ai.httpx, "post", lambda *a, **k: response)
+        assert message in c.post(path).json()["detail"]
 
 
 @pytest.mark.parametrize("scheme", ["postgres", "postgresql", "postgresql+psycopg"])
