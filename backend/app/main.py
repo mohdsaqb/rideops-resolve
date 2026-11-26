@@ -13,6 +13,7 @@ from sqlalchemy import func, or_, select, update
 
 from . import ai, troubleshooting, repairs
 from .analytics import overview
+from .keepalive import lifespan
 from .db import (
     DemoRoster,
     Agent,
@@ -49,7 +50,7 @@ from .schemas import (
     TicketPage,
 )
 
-app = FastAPI(title="RideOps Resolve", version="1.0")
+app = FastAPI(title="RideOps Resolve", version="1.0", lifespan=lifespan)
 DB = Depends(session)
 FILTER = Depends(filters)
 
@@ -64,6 +65,11 @@ async def check_request_origin(request, call_next):
             {"detail": "Open this workspace to make changes."}, status_code=403
         )
     return await call_next(request)
+
+
+@app.get("/health")
+async def liveness():
+    return {"status": "ok"}
 
 
 @app.get("/api/health")
